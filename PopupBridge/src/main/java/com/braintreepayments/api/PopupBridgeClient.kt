@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
@@ -16,17 +15,17 @@ import com.braintreepayments.api.internal.AnalyticsParamRepository
 import com.braintreepayments.api.internal.PendingRequestRepository
 import com.braintreepayments.api.internal.PopupBridgeJavascriptInterface
 import com.braintreepayments.api.internal.PopupBridgeJavascriptInterface.Companion.POPUP_BRIDGE_URL_HOST
-import com.braintreepayments.api.internal.isVenmoInstalled
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONException
 import org.json.JSONObject
-import java.lang.ref.WeakReference
 
 class PopupBridgeClient @SuppressLint("SetJavaScriptEnabled") internal constructor(
     activity: ComponentActivity,
     webView: WebView,
     private val returnUrlScheme: String,
+    private val popupBridgeWebViewClient: PopupBridgeWebViewClient,
     private val browserSwitchClient: BrowserSwitchClient,
     private val pendingRequestRepository: PendingRequestRepository = PendingRequestRepository(activity.applicationContext),
     private val coroutineScope: CoroutineScope = activity.lifecycleScope,
@@ -64,16 +63,20 @@ class PopupBridgeClient @SuppressLint("SetJavaScriptEnabled") internal construct
      * @param activity The [ComponentActivity] that contains the [WebView].
      * @param webView The [WebView] to enable for PopupBridge.
      * @param returnUrlScheme The return url scheme to use for deep linking back into the application.
+     * @param popupBridgeWebViewClient The [PopupBridgeWebViewClient] to use for handling web view events.
      * @throws IllegalArgumentException If the activity is not valid or the fragment cannot be added.
      */
+    @JvmOverloads
     constructor(
         activity: ComponentActivity,
         webView: WebView,
-        returnUrlScheme: String
+        returnUrlScheme: String,
+        popupBridgeWebViewClient: PopupBridgeWebViewClient = PopupBridgeWebViewClient()
     ) : this(
         activity = activity,
         webView = webView,
         returnUrlScheme = returnUrlScheme,
+        popupBridgeWebViewClient = popupBridgeWebViewClient,
         browserSwitchClient = BrowserSwitchClient()
     )
 
@@ -88,12 +91,7 @@ class PopupBridgeClient @SuppressLint("SetJavaScriptEnabled") internal construct
 
         webView.settings.javaScriptEnabled = true
         webView.addJavascriptInterface(popupBridgeJavascriptInterface, POPUP_BRIDGE_NAME)
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView, url: String) {
-                super.onPageFinished(view, url)
-                setVenmoInstalled(activity.isVenmoInstalled())
-            }
-        }
+        webView.webViewClient = popupBridgeWebViewClient
 
         with(popupBridgeJavascriptInterface) {
             onOpen = { url -> openUrl(url) }
@@ -217,23 +215,6 @@ class PopupBridgeClient @SuppressLint("SetJavaScriptEnabled") internal construct
                     + "} else {"
                     + "  window.addEventListener('load', function () {"
                     + "    notifyCanceled();"
-                    + "  });"
-                    + "}"
-        )
-    }
-
-    private fun setVenmoInstalled(isVenmoInstalled: Boolean) {
-        runJavaScriptInWebView(
-            ""
-                    + "function setVenmoInstalled() {"
-                    + "    window.popupBridge.isVenmoInstalled = ${isVenmoInstalled};"
-                    + "}"
-                    + ""
-                    + "if (document.readyState === 'complete') {"
-                    + "  setVenmoInstalled();"
-                    + "} else {"
-                    + "  window.addEventListener('load', function () {"
-                    + "    setVenmoInstalled();"
                     + "  });"
                     + "}"
         )
