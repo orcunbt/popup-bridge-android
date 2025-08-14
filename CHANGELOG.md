@@ -1,6 +1,6 @@
 # PopupBridge Android Release Notes
 
-## unreleased
+## 5.1.0
 
 * Fix an issue where the WebViewClient is being silently overridden. [#95](https://github.com/braintree/popup-bridge-android/issues/95)
 
