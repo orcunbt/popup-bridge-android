@@ -21,6 +21,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONException
 import org.json.JSONObject
 
+// NEW: import the session-ended listener interface exposed by browser-switch
+import com.braintreepayments.browserswitch.OnCustomTabSessionEndedListener
+
 class PopupBridgeClient @SuppressLint("SetJavaScriptEnabled") internal constructor(
     activity: ComponentActivity,
     webView: WebView,
@@ -99,6 +102,19 @@ class PopupBridgeClient @SuppressLint("SetJavaScriptEnabled") internal construct
                 messageListener?.onMessageReceived(messageName, data)
             }
         }
+
+        // NEW: listen for Chrome Custom Tab session end (close or minimize)
+        // Treat it as a cancel and notify the WebView just like a manual close.
+        browserSwitchClient.setOnCustomTabSessionEndedListener(
+            OnCustomTabSessionEndedListener { _didUserInteract ->
+                // Clear any pending request; there will be no deep-link Intent.
+                coroutineScope.launch {
+                    pendingRequestRepository.clearPendingRequest()
+                }
+                // Notify JS (onCancel if present; else onComplete(null, null))
+                runCanceledJavaScript()
+            }
+        )
     }
 
     fun setNavigationListener(listener: PopupBridgeNavigationListener?) {
